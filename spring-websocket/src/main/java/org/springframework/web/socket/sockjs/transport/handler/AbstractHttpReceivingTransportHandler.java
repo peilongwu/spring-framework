@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,14 +17,14 @@
 package org.springframework.web.socket.sockjs.transport.handler;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.sockjs.SockJsException;
@@ -38,6 +38,11 @@ import org.springframework.web.socket.sockjs.transport.session.AbstractHttpSockJ
  * @since 4.0
  */
 public abstract class AbstractHttpReceivingTransportHandler extends AbstractTransportHandler {
+
+	@Override
+	public boolean checkSessionType(SockJsSession session) {
+		return (session instanceof AbstractHttpSockJsSession);
+	}
 
 	@Override
 	public final void handleRequest(ServerHttpRequest request, ServerHttpResponse response,
@@ -56,47 +61,47 @@ public abstract class AbstractHttpReceivingTransportHandler extends AbstractTran
 		try {
 			messages = readMessages(request);
 		}
-		catch (JsonMappingException ex) {
-			logger.error("Failed to read message", ex);
-			handleReadError(response, "Payload expected.", sockJsSession.getId());
-			return;
-		}
 		catch (IOException ex) {
 			logger.error("Failed to read message", ex);
-			handleReadError(response, "Broken JSON encoding.", sockJsSession.getId());
+			if (ex.getClass().getName().contains("Mapping")) {
+				// e.g. Jackson's JsonMappingException, indicating an incomplete payload
+				handleReadError(response, "Payload expected.", sockJsSession.getId());
+			}
+			else {
+				handleReadError(response, "Broken JSON encoding.", sockJsSession.getId());
+			}
 			return;
 		}
-		catch (Throwable ex) {
+		catch (Exception ex) {
 			logger.error("Failed to read message", ex);
 			handleReadError(response, "Failed to read message(s)", sockJsSession.getId());
 			return;
 		}
-
 		if (messages == null) {
 			handleReadError(response, "Payload expected.", sockJsSession.getId());
 			return;
 		}
-
 		if (logger.isTraceEnabled()) {
 			logger.trace("Received message(s): " + Arrays.asList(messages));
 		}
-
 		response.setStatusCode(getResponseStatus());
-		response.getHeaders().setContentType(new MediaType("text", "plain", UTF8_CHARSET));
+		response.getHeaders().setContentType(new MediaType("text", "plain", StandardCharsets.UTF_8));
 
 		sockJsSession.delegateMessages(messages);
 	}
 
-	private void handleReadError(ServerHttpResponse resp, String error, String sessionId) {
+	private void handleReadError(ServerHttpResponse response, String error, String sessionId) {
 		try {
-			resp.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
-			resp.getBody().write(error.getBytes("UTF-8"));
+			response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
+			response.getBody().write(error.getBytes(StandardCharsets.UTF_8));
 		}
 		catch (IOException ex) {
 			throw new SockJsException("Failed to send error: " + error, sessionId, ex);
 		}
 	}
 
+
+	@Nullable
 	protected abstract String[] readMessages(ServerHttpRequest request) throws IOException;
 
 	protected abstract HttpStatus getResponseStatus();

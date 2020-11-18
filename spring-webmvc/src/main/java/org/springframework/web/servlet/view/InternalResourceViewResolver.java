@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 
 package org.springframework.web.servlet.view;
 
+import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -50,11 +51,8 @@ public class InternalResourceViewResolver extends UrlBasedViewResolver {
 	private static final boolean jstlPresent = ClassUtils.isPresent(
 			"javax.servlet.jsp.jstl.core.Config", InternalResourceViewResolver.class.getClassLoader());
 
+	@Nullable
 	private Boolean alwaysInclude;
-
-	private Boolean exposeContextBeansAsAttributes;
-
-	private String[] exposedContextBeanNames;
 
 
 	/**
@@ -64,18 +62,23 @@ public class InternalResourceViewResolver extends UrlBasedViewResolver {
 	 */
 	public InternalResourceViewResolver() {
 		Class<?> viewClass = requiredViewClass();
-		if (viewClass.equals(InternalResourceView.class) && jstlPresent) {
+		if (InternalResourceView.class == viewClass && jstlPresent) {
 			viewClass = JstlView.class;
 		}
 		setViewClass(viewClass);
 	}
 
 	/**
-	 * This resolver requires {@link InternalResourceView}.
+	 * A convenience constructor that allows for specifying {@link #setPrefix prefix}
+	 * and {@link #setSuffix suffix} as constructor arguments.
+	 * @param prefix the prefix that gets prepended to view names when building a URL
+	 * @param suffix the suffix that gets appended to view names when building a URL
+	 * @since 4.3
 	 */
-	@Override
-	protected Class<?> requiredViewClass() {
-		return InternalResourceView.class;
+	public InternalResourceViewResolver(String prefix, String suffix) {
+		this();
+		setPrefix(prefix);
+		setSuffix(suffix);
 	}
 
 
@@ -86,44 +89,26 @@ public class InternalResourceViewResolver extends UrlBasedViewResolver {
 	 * @see InternalResourceView#setAlwaysInclude
 	 */
 	public void setAlwaysInclude(boolean alwaysInclude) {
-		this.alwaysInclude = Boolean.valueOf(alwaysInclude);
+		this.alwaysInclude = alwaysInclude;
 	}
 
-	/**
-	 * Set whether to make all Spring beans in the application context accessible
-	 * as request attributes, through lazy checking once an attribute gets accessed.
-	 * <p>This will make all such beans accessible in plain {@code ${...}}
-	 * expressions in a JSP 2.0 page, as well as in JSTL's {@code c:out}
-	 * value expressions.
-	 * <p>Default is "false".
-	 * @see InternalResourceView#setExposeContextBeansAsAttributes
-	 */
-	public void setExposeContextBeansAsAttributes(boolean exposeContextBeansAsAttributes) {
-		this.exposeContextBeansAsAttributes = exposeContextBeansAsAttributes;
+
+	@Override
+	protected Class<?> requiredViewClass() {
+		return InternalResourceView.class;
 	}
 
-	/**
-	 * Specify the names of beans in the context which are supposed to be exposed.
-	 * If this is non-null, only the specified beans are eligible for exposure as
-	 * attributes.
-	 * @see InternalResourceView#setExposedContextBeanNames
-	 */
-	public void setExposedContextBeanNames(String[] exposedContextBeanNames) {
-		this.exposedContextBeanNames = exposedContextBeanNames;
+	@Override
+	protected AbstractUrlBasedView instantiateView() {
+		return (getViewClass() == InternalResourceView.class ? new InternalResourceView() :
+				(getViewClass() == JstlView.class ? new JstlView() : super.instantiateView()));
 	}
-
 
 	@Override
 	protected AbstractUrlBasedView buildView(String viewName) throws Exception {
 		InternalResourceView view = (InternalResourceView) super.buildView(viewName);
 		if (this.alwaysInclude != null) {
 			view.setAlwaysInclude(this.alwaysInclude);
-		}
-		if (this.exposeContextBeansAsAttributes != null) {
-			view.setExposeContextBeansAsAttributes(this.exposeContextBeansAsAttributes);
-		}
-		if (this.exposedContextBeanNames != null) {
-			view.setExposedContextBeanNames(this.exposedContextBeanNames);
 		}
 		view.setPreventDispatchLoop(true);
 		return view;

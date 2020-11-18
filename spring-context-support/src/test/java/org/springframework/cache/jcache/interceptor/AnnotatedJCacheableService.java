@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,9 +29,10 @@ import javax.cache.annotation.CacheResult;
 import javax.cache.annotation.CacheValue;
 
 import org.springframework.cache.Cache;
-import org.springframework.cache.jcache.config.JCacheableService;
-import org.springframework.cache.jcache.support.TestableCacheKeyGenerator;
-import org.springframework.cache.jcache.support.TestableCacheResolverFactory;
+import org.springframework.cache.interceptor.SimpleKeyGenerator;
+import org.springframework.contextsupport.testfixture.cache.TestableCacheKeyGenerator;
+import org.springframework.contextsupport.testfixture.cache.TestableCacheResolverFactory;
+import org.springframework.contextsupport.testfixture.jcache.JCacheableService;
 
 /**
  * Repository sample with a @CacheDefaults annotation
@@ -55,6 +56,12 @@ public class AnnotatedJCacheableService implements JCacheableService<Long> {
 	@CacheResult
 	public Long cache(String id) {
 		return counter.getAndIncrement();
+	}
+
+	@Override
+	@CacheResult
+	public Long cacheNull(String id) {
+		return null;
 	}
 
 	@Override
@@ -109,7 +116,7 @@ public class AnnotatedJCacheableService implements JCacheableService<Long> {
 	@Override
 	@CachePut(afterInvocation = false)
 	public void earlyPut(String id, @CacheValue Object value) {
-		SimpleGeneratedCacheKey key = new SimpleGeneratedCacheKey(id);
+		Object key = SimpleKeyGenerator.generateKey(id);
 		Cache.ValueWrapper valueWrapper = defaultCache.get(key);
 		if (valueWrapper == null) {
 			throw new AssertionError("Excepted value to be put in cache with key " + key);
@@ -141,7 +148,7 @@ public class AnnotatedJCacheableService implements JCacheableService<Long> {
 	@Override
 	@CacheRemove(afterInvocation = false)
 	public void earlyRemove(String id) {
-		SimpleGeneratedCacheKey key = new SimpleGeneratedCacheKey(id);
+		Object key = SimpleKeyGenerator.generateKey(id);
 		Cache.ValueWrapper valueWrapper = defaultCache.get(key);
 		if (valueWrapper != null) {
 			throw new AssertionError("Value with key " + key + " expected to be already remove from cache");

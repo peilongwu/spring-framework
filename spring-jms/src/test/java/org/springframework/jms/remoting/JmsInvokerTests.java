@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Enumeration;
 
+import javax.jms.CompletionListener;
 import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.Message;
@@ -31,53 +32,77 @@ import javax.jms.QueueConnectionFactory;
 import javax.jms.QueueSession;
 import javax.jms.Session;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.testfixture.beans.ITestBean;
+import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.jms.support.converter.MessageConversionException;
 import org.springframework.jms.support.converter.SimpleMessageConverter;
-import org.springframework.tests.sample.beans.ITestBean;
-import org.springframework.tests.sample.beans.TestBean;
+import org.springframework.remoting.RemoteTimeoutException;
 
-import static org.junit.Assert.*;
-import static org.mockito.BDDMockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 /**
  * @author Juergen Hoeller
+ * @author Stephane Nicoll
  */
-public class JmsInvokerTests {
+class JmsInvokerTests {
 
-	private QueueConnectionFactory mockConnectionFactory;
+	private QueueConnectionFactory mockConnectionFactory = mock(QueueConnectionFactory.class);
 
-	private QueueConnection mockConnection;
+	private QueueConnection mockConnection = mock(QueueConnection.class);
 
-	private QueueSession mockSession;
+	private QueueSession mockSession = mock(QueueSession.class);
 
-	private Queue mockQueue;
+	private Queue mockQueue = mock(Queue.class);
 
 
-	@Before
-	public void setUpMocks() throws Exception {
-		mockConnectionFactory = mock(QueueConnectionFactory.class);
-		mockConnection = mock(QueueConnection.class);
-		mockSession = mock(QueueSession.class);
-		mockQueue = mock(Queue.class);
-
+	@BeforeEach
+	void setUpMocks() throws Exception {
 		given(mockConnectionFactory.createConnection()).willReturn(mockConnection);
 		given(mockConnection.createSession(false, Session.AUTO_ACKNOWLEDGE)).willReturn(mockSession);
 	}
 
 
 	@Test
-	public void testJmsInvokerProxyFactoryBeanAndServiceExporter() throws Throwable {
+	void jmsInvokerProxyFactoryBeanAndServiceExporter() throws Throwable {
 		doTestJmsInvokerProxyFactoryBeanAndServiceExporter(false);
 	}
 
 	@Test
-	public void testJmsInvokerProxyFactoryBeanAndServiceExporterWithDynamicQueue() throws Throwable {
+	void jmsInvokerProxyFactoryBeanAndServiceExporterWithDynamicQueue() throws Throwable {
 		given(mockSession.createQueue("myQueue")).willReturn(mockQueue);
 		doTestJmsInvokerProxyFactoryBeanAndServiceExporter(true);
 	}
 
+	@Test
+	@SuppressWarnings("deprecation")
+	void receiveTimeoutExpired() {
+		JmsInvokerProxyFactoryBean pfb = new JmsInvokerProxyFactoryBean() {
+			@Override
+			protected Message doExecuteRequest(Session session, Queue queue, Message requestMessage) throws JMSException {
+				return null; // faking no message received
+			}
+		};
+		pfb.setServiceInterface(ITestBean.class);
+		pfb.setConnectionFactory(this.mockConnectionFactory);
+		pfb.setQueue(this.mockQueue);
+		pfb.setReceiveTimeout(1500);
+		pfb.afterPropertiesSet();
+		ITestBean proxy = (ITestBean) pfb.getObject();
+
+		assertThatExceptionOfType(RemoteTimeoutException.class).isThrownBy(() ->
+				proxy.getAge())
+			.withMessageContaining("1500 ms")
+			.withMessageContaining("getAge");
+	}
+
+	@SuppressWarnings("deprecation")
 	private void doTestJmsInvokerProxyFactoryBeanAndServiceExporter(boolean dynamicQueue) throws Throwable {
 		TestBean target = new TestBean("myname", 99);
 
@@ -94,7 +119,7 @@ public class JmsInvokerTests {
 				ResponseStoringProducer mockProducer = new ResponseStoringProducer();
 				given(mockExporterSession.createProducer(requestMessage.getJMSReplyTo())).willReturn(mockProducer);
 				exporter.onMessage(requestMessage, mockExporterSession);
-				assertTrue(mockProducer.closed);
+				assertThat(mockProducer.closed).isTrue();
 				return mockProducer.response;
 			}
 		};
@@ -111,35 +136,24 @@ public class JmsInvokerTests {
 		pfb.afterPropertiesSet();
 		ITestBean proxy = (ITestBean) pfb.getObject();
 
-		assertEquals("myname", proxy.getName());
-		assertEquals(99, proxy.getAge());
+		assertThat(proxy.getName()).isEqualTo("myname");
+		assertThat(proxy.getAge()).isEqualTo(99);
 		proxy.setAge(50);
-		assertEquals(50, proxy.getAge());
+		assertThat(proxy.getAge()).isEqualTo(50);
 		proxy.setStringArray(new String[] {"str1", "str2"});
-		assertTrue(Arrays.equals(new String[] {"str1", "str2"}, proxy.getStringArray()));
-
-		try {
-			proxy.exceptional(new IllegalStateException());
-			fail("Should have thrown IllegalStateException");
-		}
-		catch (IllegalStateException ex) {
-			// expected
-		}
-		try {
-			proxy.exceptional(new IllegalAccessException());
-			fail("Should have thrown IllegalAccessException");
-		}
-		catch (IllegalAccessException ex) {
-			// expected
-		}
+		assertThat(Arrays.equals(new String[] {"str1", "str2"}, proxy.getStringArray())).isTrue();
+		assertThatIllegalStateException().isThrownBy(() ->
+			proxy.exceptional(new IllegalStateException()));
+		assertThatExceptionOfType(IllegalAccessException.class).isThrownBy(() ->
+				proxy.exceptional(new IllegalAccessException()));
 	}
 
 
 	private static class ResponseStoringProducer implements MessageProducer {
 
-		public Message response;
+		Message response;
 
-		public boolean closed = false;
+		boolean closed = false;
 
 		@Override
 		public void setDisableMessageID(boolean b) throws JMSException {
@@ -187,6 +201,15 @@ public class JmsInvokerTests {
 		}
 
 		@Override
+		public void setDeliveryDelay(long deliveryDelay) throws JMSException {
+		}
+
+		@Override
+		public long getDeliveryDelay() throws JMSException {
+			return 0;
+		}
+
+		@Override
 		public Destination getDestination() throws JMSException {
 			return null;
 		}
@@ -211,6 +234,22 @@ public class JmsInvokerTests {
 
 		@Override
 		public void send(Destination destination, Message message, int i, int i1, long l) throws JMSException {
+		}
+
+		@Override
+		public void send(Message message, CompletionListener completionListener) throws JMSException {
+		}
+
+		@Override
+		public void send(Message message, int deliveryMode, int priority, long timeToLive, CompletionListener completionListener) throws JMSException {
+		}
+
+		@Override
+		public void send(Destination destination, Message message, CompletionListener completionListener) throws JMSException {
+		}
+
+		@Override
+		public void send(Destination destination, Message message, int deliveryMode, int priority, long timeToLive, CompletionListener completionListener) throws JMSException {
 		}
 	}
 
@@ -336,6 +375,26 @@ public class JmsInvokerTests {
 		}
 
 		@Override
+		public long getJMSDeliveryTime() throws JMSException {
+			return 0;
+		}
+
+		@Override
+		public void setJMSDeliveryTime(long deliveryTime) throws JMSException {
+		}
+
+		@Override
+		public <T> T getBody(Class<T> c) throws JMSException {
+			return null;
+		}
+
+		@Override
+		@SuppressWarnings("rawtypes")
+		public boolean isBodyAssignableTo(Class c) throws JMSException {
+			return false;
+		}
+
+		@Override
 		public void clearProperties() throws JMSException {
 		}
 
@@ -390,6 +449,7 @@ public class JmsInvokerTests {
 		}
 
 		@Override
+		@SuppressWarnings("rawtypes")
 		public Enumeration getPropertyNames() throws JMSException {
 			return null;
 		}

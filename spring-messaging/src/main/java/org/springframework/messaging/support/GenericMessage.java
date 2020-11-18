@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,6 +19,7 @@ package org.springframework.messaging.support;
 import java.io.Serializable;
 import java.util.Map;
 
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.Assert;
@@ -30,7 +31,7 @@ import org.springframework.util.ObjectUtils;
  *
  * @author Mark Fisher
  * @since 4.0
- *
+ * @param <T> the payload type
  * @see MessageBuilder
  */
 public class GenericMessage<T> implements Message<T>, Serializable {
@@ -45,8 +46,7 @@ public class GenericMessage<T> implements Message<T>, Serializable {
 
 	/**
 	 * Create a new message with the given payload.
-	 *
-	 * @param payload the message payload, never {@code null}
+	 * @param payload the message payload (never {@code null})
 	 */
 	public GenericMessage(T payload) {
 		this(payload, new MessageHeaders(null));
@@ -55,8 +55,7 @@ public class GenericMessage<T> implements Message<T>, Serializable {
 	/**
 	 * Create a new message with the given payload and headers.
 	 * The content of the given header map is copied.
-	 *
-	 * @param payload the message payload, never {@code null}
+	 * @param payload the message payload (never {@code null})
 	 * @param headers message headers to use for initialization
 	 */
 	public GenericMessage(T payload, Map<String, Object> headers) {
@@ -65,56 +64,61 @@ public class GenericMessage<T> implements Message<T>, Serializable {
 
 	/**
 	 * A constructor with the {@link MessageHeaders} instance to use.
-	 *
 	 * <p><strong>Note:</strong> the given {@code MessageHeaders} instance is used
 	 * directly in the new message, i.e. it is not copied.
-	 *
-	 * @param payload the message payload, never {@code null}
+	 * @param payload the message payload (never {@code null})
 	 * @param headers message headers
 	 */
 	public GenericMessage(T payload, MessageHeaders headers) {
-		Assert.notNull(headers, "'headers' must not be null");
-		Assert.notNull(payload, "payload must not be null");
-		this.headers = headers;
+		Assert.notNull(payload, "Payload must not be null");
+		Assert.notNull(headers, "MessageHeaders must not be null");
 		this.payload = payload;
+		this.headers = headers;
 	}
 
 
-	public MessageHeaders getHeaders() {
-		return this.headers;
-	}
-
+	@Override
 	public T getPayload() {
 		return this.payload;
 	}
 
-	public String toString() {
-		StringBuilder sb = new StringBuilder();
-		if (this.payload instanceof byte[]) {
-			sb.append("[Payload byte[").append(((byte[]) this.payload).length).append("]]");
-		}
-		else {
-			sb.append("[Payload ").append(this.payload.getClass().getSimpleName());
-			sb.append(" content=").append(this.payload).append("]");
-		}
-		sb.append("[Headers=").append(this.headers).append("]");
-		return sb.toString();
+	@Override
+	public MessageHeaders getHeaders() {
+		return this.headers;
 	}
 
-	public int hashCode() {
-		return this.headers.hashCode() * 23 + ObjectUtils.nullSafeHashCode(this.payload);
-	}
 
-	public boolean equals(Object obj) {
-		if (this == obj) {
+	@Override
+	public boolean equals(@Nullable Object other) {
+		if (this == other) {
 			return true;
 		}
-		if (obj != null && obj instanceof GenericMessage<?>) {
-			GenericMessage<?> other = (GenericMessage<?>) obj;
-			return (ObjectUtils.nullSafeEquals(this.headers.getId(), other.headers.getId()) &&
-					this.headers.equals(other.headers) && this.payload.equals(other.payload));
+		if (!(other instanceof GenericMessage)) {
+			return false;
 		}
-		return false;
+		GenericMessage<?> otherMsg = (GenericMessage<?>) other;
+		// Using nullSafeEquals for proper array equals comparisons
+		return (ObjectUtils.nullSafeEquals(this.payload, otherMsg.payload) && this.headers.equals(otherMsg.headers));
+	}
+
+	@Override
+	public int hashCode() {
+		// Using nullSafeHashCode for proper array hashCode handling
+		return (ObjectUtils.nullSafeHashCode(this.payload) * 23 + this.headers.hashCode());
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder(getClass().getSimpleName());
+		sb.append(" [payload=");
+		if (this.payload instanceof byte[]) {
+			sb.append("byte[").append(((byte[]) this.payload).length).append("]");
+		}
+		else {
+			sb.append(this.payload);
+		}
+		sb.append(", headers=").append(this.headers).append("]");
+		return sb.toString();
 	}
 
 }

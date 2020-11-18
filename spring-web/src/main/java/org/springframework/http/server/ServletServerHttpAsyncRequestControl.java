@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,6 +25,7 @@ import javax.servlet.AsyncListener;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
@@ -35,15 +36,17 @@ import org.springframework.util.Assert;
  */
 public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequestControl, AsyncListener {
 
-	private static long NO_TIMEOUT_VALUE = Long.MIN_VALUE;
+	private static final long NO_TIMEOUT_VALUE = Long.MIN_VALUE;
+
 
 	private final ServletServerHttpRequest request;
 
 	private final ServletServerHttpResponse response;
 
+	@Nullable
 	private AsyncContext asyncContext;
 
-	private AtomicBoolean asyncCompleted = new AtomicBoolean(false);
+	private AtomicBoolean asyncCompleted = new AtomicBoolean();
 
 
 	/**
@@ -52,7 +55,6 @@ public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequ
 	 * respectively.
 	 */
 	public ServletServerHttpAsyncRequestControl(ServletServerHttpRequest request, ServletServerHttpResponse response) {
-
 		Assert.notNull(request, "request is required");
 		Assert.notNull(response, "response is required");
 
@@ -69,7 +71,7 @@ public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequ
 
 	@Override
 	public boolean isStarted() {
-		return ((this.asyncContext != null) && this.request.getServletRequest().isAsyncStarted());
+		return (this.asyncContext != null && this.request.getServletRequest().isAsyncStarted());
 	}
 
 	@Override
@@ -84,9 +86,7 @@ public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequ
 
 	@Override
 	public void start(long timeout) {
-
 		Assert.state(!isCompleted(), "Async processing has already completed");
-
 		if (isStarted()) {
 			return;
 		}
@@ -104,10 +104,11 @@ public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequ
 
 	@Override
 	public void complete() {
-		if (isStarted() && !isCompleted()) {
+		if (this.asyncContext != null && isStarted() && !isCompleted()) {
 			this.asyncContext.complete();
 		}
 	}
+
 
 	// ---------------------------------------------------------------------
 	// Implementation of AsyncListener methods
@@ -120,12 +121,15 @@ public class ServletServerHttpAsyncRequestControl implements ServerHttpAsyncRequ
 	}
 
 	@Override
-	public void onStartAsync(AsyncEvent event) throws IOException { }
+	public void onStartAsync(AsyncEvent event) throws IOException {
+	}
 
 	@Override
-	public void onError(AsyncEvent event) throws IOException { }
+	public void onError(AsyncEvent event) throws IOException {
+	}
 
 	@Override
-	public void onTimeout(AsyncEvent event) throws IOException { }
+	public void onTimeout(AsyncEvent event) throws IOException {
+	}
 
 }

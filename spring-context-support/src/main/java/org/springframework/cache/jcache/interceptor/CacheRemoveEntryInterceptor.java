@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,9 +19,9 @@ package org.springframework.cache.jcache.interceptor;
 import javax.cache.annotation.CacheRemove;
 
 import org.springframework.cache.Cache;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.cache.interceptor.CacheOperationInvocationContext;
 import org.springframework.cache.interceptor.CacheOperationInvoker;
-import org.springframework.cache.jcache.model.CacheRemoveOperation;
 
 /**
  * Intercept methods annotated with {@link CacheRemove}.
@@ -30,15 +30,19 @@ import org.springframework.cache.jcache.model.CacheRemoveOperation;
  * @since 4.1
  */
 @SuppressWarnings("serial")
-public class CacheRemoveEntryInterceptor extends AbstractKeyCacheInterceptor<CacheRemoveOperation, CacheRemove> {
+class CacheRemoveEntryInterceptor extends AbstractKeyCacheInterceptor<CacheRemoveOperation, CacheRemove> {
+
+	protected CacheRemoveEntryInterceptor(CacheErrorHandler errorHandler) {
+		super(errorHandler);
+	}
+
 
 	@Override
-	protected Object invoke(CacheOperationInvocationContext<CacheRemoveOperation> context,
-			CacheOperationInvoker invoker) {
+	protected Object invoke(
+			CacheOperationInvocationContext<CacheRemoveOperation> context, CacheOperationInvoker invoker) {
+
 		CacheRemoveOperation operation = context.getOperation();
-
-		final boolean earlyRemove = operation.isEarlyRemove();
-
+		boolean earlyRemove = operation.isEarlyRemove();
 		if (earlyRemove) {
 			removeValue(context);
 		}
@@ -50,12 +54,12 @@ public class CacheRemoveEntryInterceptor extends AbstractKeyCacheInterceptor<Cac
 			}
 			return result;
 		}
-		catch (CacheOperationInvoker.ThrowableWrapper t) {
-			Throwable ex = t.getOriginal();
+		catch (CacheOperationInvoker.ThrowableWrapper wrapperException) {
+			Throwable ex = wrapperException.getOriginal();
 			if (!earlyRemove && operation.getExceptionTypeFilter().match(ex.getClass())) {
 				removeValue(context);
 			}
-			throw t;
+			throw wrapperException;
 		}
 	}
 
@@ -63,10 +67,10 @@ public class CacheRemoveEntryInterceptor extends AbstractKeyCacheInterceptor<Cac
 		Object key = generateKey(context);
 		Cache cache = resolveCache(context);
 		if (logger.isTraceEnabled()) {
-			logger.trace("Invalidating key [" + key + "] on cache '" + cache.getName()
-					+ "' for operation " + context.getOperation());
+			logger.trace("Invalidating key [" + key + "] on cache '" + cache.getName() +
+					"' for operation " + context.getOperation());
 		}
-		cache.evict(key);
+		doEvict(cache, key, context.getOperation().isEarlyRemove());
 	}
 
 }

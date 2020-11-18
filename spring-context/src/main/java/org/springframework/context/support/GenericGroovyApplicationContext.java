@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,6 +28,7 @@ import org.springframework.beans.factory.groovy.GroovyBeanDefinitionReader;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.lang.Nullable;
 
 /**
  * An {@link org.springframework.context.ApplicationContext} implementation that extends
@@ -35,8 +36,9 @@ import org.springframework.core.io.Resource;
  * can be retrieved with the dot de-reference syntax instead of using {@link #getBean}.
  *
  * <p>Consider this as the equivalent of {@link GenericXmlApplicationContext} for
- * Groovy bean definitions. The main difference is that, within a Groovy script,
- * the context can be used with an inline bean definition closure as follows:
+ * Groovy bean definitions, or even an upgrade thereof since it seamlessly understands
+ * XML bean definition files as well. The main difference is that, within a Groovy
+ * script, the context can be used with an inline bean definition closure as follows:
  *
  * <pre class="code">
  * import org.hibernate.SessionFactory
@@ -104,6 +106,11 @@ import org.springframework.core.io.Resource;
  * ApplicationContext context = new GenericGroovyApplicationContext("org/myapp/applicationContext.groovy");
  * </pre>
  *
+ * <p><b>This application context also understands XML bean definition files,
+ * allowing for seamless mixing and matching with Groovy bean definition files.</b>
+ * ".xml" files will be parsed as XML content; all other kinds of resources will
+ * be parsed as Groovy scripts.
+ *
  * @author Juergen Hoeller
  * @author Jeff Brown
  * @since 4.0
@@ -115,7 +122,7 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 
 	private final BeanWrapper contextWrapper = new BeanWrapperImpl(this);
 
-    private MetaClass metaClass = GroovySystem.getMetaClassRegistry().getMetaClass(getClass());
+	private MetaClass metaClass = GroovySystem.getMetaClassRegistry().getMetaClass(getClass());
 
 
 	/**
@@ -180,7 +187,9 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 	}
 
 	/**
-	 * Load bean definitions from the given Groovy scripts.
+	 * Load bean definitions from the given Groovy scripts or XML files.
+	 * <p>Note that ".xml" files will be parsed as XML content; all other kinds
+	 * of resources will be parsed as Groovy scripts.
 	 * @param resources one or more resources to load from
 	 */
 	public void load(Resource... resources) {
@@ -188,7 +197,9 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 	}
 
 	/**
-	 * Load bean definitions from the given Groovy scripts.
+	 * Load bean definitions from the given Groovy scripts or XML files.
+	 * <p>Note that ".xml" files will be parsed as XML content; all other kinds
+	 * of resources will be parsed as Groovy scripts.
 	 * @param resourceLocations one or more resource locations to load from
 	 */
 	public void load(String... resourceLocations) {
@@ -196,7 +207,9 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 	}
 
 	/**
-	 * Load bean definitions from the given Groovy scripts.
+	 * Load bean definitions from the given Groovy scripts or XML files.
+	 * <p>Note that ".xml" files will be parsed as XML content; all other kinds
+	 * of resources will be parsed as Groovy scripts.
 	 * @param relativeClass class whose package will be used as a prefix when
 	 * loading each specified resource name
 	 * @param resourceNames relatively-qualified names of resources to load
@@ -206,24 +219,28 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 		for (int i = 0; i < resourceNames.length; i++) {
 			resources[i] = new ClassPathResource(resourceNames[i], relativeClass);
 		}
-		this.load(resources);
+		load(resources);
 	}
 
 
-	// IMPLEMENTATION OF THE GROOVYOBJECT INTERFACE
+	// Implementation of the GroovyObject interface
 
+	@Override
 	public void setMetaClass(MetaClass metaClass) {
 		this.metaClass = metaClass;
 	}
 
-    public MetaClass getMetaClass() {
+	@Override
+	public MetaClass getMetaClass() {
 		return this.metaClass;
 	}
 
+	@Override
 	public Object invokeMethod(String name, Object args) {
 		return this.metaClass.invokeMethod(this, name, args);
 	}
 
+	@Override
 	public void setProperty(String property, Object newValue) {
 		if (newValue instanceof BeanDefinition) {
 			registerBeanDefinition(property, (BeanDefinition) newValue);
@@ -233,7 +250,9 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 		}
 	}
 
-    public Object getProperty(String property) {
+	@Override
+	@Nullable
+	public Object getProperty(String property) {
 		if (containsBean(property)) {
 			return getBean(property);
 		}
@@ -244,4 +263,3 @@ public class GenericGroovyApplicationContext extends GenericApplicationContext i
 	}
 
 }
-
